@@ -21,12 +21,12 @@ jobs:
         run: |
           set -e
           repo="$(pwd)"
-          # 1) prefer workspace Cargo.toml
+          # 1) workspace Cargo.toml if present
           ws="$(grep -rl '^\[workspace\]' --include Cargo.toml "$repo" | head -n1 || true)"
           if [ -n "$ws" ]; then
             root="$(dirname "$ws")"
           else
-            # 2) fallback: first Cargo.toml (e.g., agent/host/Cargo.toml)
+            # 2) fallback: first Cargo.toml (e.g. agent/host/Cargo.toml)
             first="$(git ls-files '**/Cargo.toml' | head -n1 || true)"
             [ -n "$first" ] || { echo "No Cargo.toml found"; exit 1; }
             root="$(dirname "$first")"
@@ -48,3 +48,36 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown || true
           cargo build --workspace --release --verbose
+
+      - name: Detect & build WASM (cdylib) crates
+        working-directory: ${{ steps.findroot.outputs.root }}
+        shell: bash
+        run: |
+          set -e
+          all=$(cargo metadata --format-version=1 --no-deps \
+            | jq -r '.packages[] | select([.targets[]?.kind[]] | any(.=="cdylib")) | .manifest_path')
+          if [ -z "$all" ]; then
+            echo "No cdylib crates found, skipping."
+            exit 0
+          fi
+          rustup target add wasm32-unknown-unknown || true
+          for mf in $all; do
+            echo "==> Building cdylib: $mf"
+            cargo build --manifest-path "$mf" --release --target wasm32-unknown-unknown
+          done
+          out="${{ steps.findroot.outputs.root }}/target/wasm32-unknown-unknown/release"
+          mkdir -p "${{ steps.findroot.outputs.root }}/artifacts"
+          sha="${GITHUB_SHA:0:7}"; d=$(date -u +%Y%m%d)
+          for w in "$out"/*.wasm; do
+            [ -e "$w" ] || continue
+            base=$(basename "$w" .wasm)
+            cp -f "$w" "${{ steps.findroot.outputs.root }}/artifacts/${base}-${d}-${sha}.wasm"
+            (cd "${{ steps.findroot.outputs.root }}/artifacts" && zip -q "${base}-${d}-${sha}.zip" "${base}-${d}-${sha}.wasm")
+          done
+
+      - name: Upload .wasm artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-artifacts
+          path: ${{ steps.findroot.outputs.root }}/artifacts/*
+          if-no-files-found: warn
