@@ -1,12 +1,4 @@
-/agent/target
-/agent/host/src/agent_template.wasm
-/agent/host/src/input.txt
-/agent/host/src/output.txt
-
-/node_modules
-/agent/node_modules
-
-package-lock.json
-
-/.DS_Store
-/agent/.DS_Store
+target/
+**/*.rs.bk
+Cargo.lock
+.DS_Store
