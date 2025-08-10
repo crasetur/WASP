@@ -1,0 +1,55 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Build workspace
+        run: cargo build --workspace --verbose
+      - name: Build WASM (all cdylib plugins)
+        run: |
+          rustup target add wasm32-unknown-unknown
+          for t in $(git ls-files | grep Cargo.toml); do
+            if grep -q "^\[lib\]" "$t" && grep -qi 'crate-type.*cdylib' "$t"; then
+              crate_dir=$(dirname "$t")
+              crate_name=$(basename "$crate_dir")
+              echo "==> Building $crate_name (WASM)"
+              cargo build -p "$crate_name" --target wasm32-unknown-unknown --release || exit 1
+            fi
+          done
+      - name: Setup Node
+        if: ${{ hashFiles('**/package.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Cache Node
+        if: ${{ hashFiles('**/package.json') != '' }}
+        uses: actions/cache@v4
+        with:
+          path: |
+            **/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
+          restore-keys: ${{ runner.os }}-node-
+      - name: Install deps (Node)
+        if: ${{ hashFiles('**/package.json') != '' }}
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm i; fi
+      - name: Lint (JS)
+        if: ${{ hashFiles('**/.eslintrc*') != '' }}
+        run: npx eslint . || true
