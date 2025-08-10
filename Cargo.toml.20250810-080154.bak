@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = [
+  "agent/host",
+  "agent/plugin"
+]
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+[workspace.dependencies]
+anyhow = "1"
+log = "0.4"
+env_logger = "0.11"
