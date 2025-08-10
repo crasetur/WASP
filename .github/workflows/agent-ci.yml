@@ -1,0 +1,38 @@
+name: Agent CI
+on:
+  push: { branches: [ "main" ] }
+  pull_request: { branches: [ "main" ] }
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            agent/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('agent/**/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Build (workspace)
+        run: cargo build --workspace --verbose
+      - name: Build plugin (WASM)
+        run: cargo build -p agent_plugin --release --target wasm32-unknown-unknown --verbose
+      - name: Copy wasm to host
+        run: |
+          mkdir -p host/src
+          cp target/wasm32-unknown-unknown/release/agent_plugin.wasm host/src/agent_template.wasm
+      - name: Run tests
+        run: cargo test --workspace -- --nocapture
+      - name: Smoke run host
+        run: cargo run -p wasm_host --quiet
