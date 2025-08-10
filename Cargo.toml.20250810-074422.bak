@@ -1,8 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-  "agent/host",
-  "agent/plugin"
+  # __AUTO_MEMBERS__
 ]
 [workspace.package]
 edition = "2021"
