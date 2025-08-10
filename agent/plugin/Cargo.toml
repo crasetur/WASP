@@ -1,9 +1,12 @@
 [package]
-name = "agent_plugin"
+name = "agent-template"
 version = "0.1.0"
 edition = "2021"
+
 [lib]
-crate-type = ["cdylib","rlib"]
+crate-type = ["cdylib"]
+
 [dependencies]
 anyhow = "1"
 log = "0.4"
+wasm-bindgen = "0.2"

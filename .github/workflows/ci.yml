@@ -1,5 +1,8 @@
-name: CI
-on: [push, pull_request]
+name: build
+
+on:
+  push:
+  pull_request:
 
 jobs:
   build:
@@ -7,61 +10,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
-      - uses: actions/cache@v4
+      - name: Cache cargo
+        uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Build workspace
         run: cargo build --workspace --verbose
 
-      - name: Build WASM (auto-detect cdylib crates)
-        shell: bash
-        run: |
-          set -euo pipefail
-          rustup target add wasm32-unknown-unknown
-          found=0
-          while IFS= read -r manifest; do
-            if grep -q "^\[lib\]" "$manifest" && grep -iq "crate-type.*cdylib" "$manifest"; then
-              pkg=$(grep -m1 '^name[[:space:]]*=' "$manifest" | sed -E 's/.*name[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/')
-              [ -z "$pkg" ] && pkg=$(basename "$(dirname "$manifest")")
-              echo "==> Building $pkg (WASM) from $manifest"
-              cargo build -p "$pkg" --target wasm32-unknown-unknown --release
-              found=1
-            fi
-          done < <(find . -name Cargo.toml)
-          [ "$found" = 0 ] && echo "No cdylib crates found; skipping."
+      - name: Build WASM (agent-template)
+        run: cargo build -p agent-template --target wasm32-unknown-unknown --release --verbose
 
-      - name: Setup Node
-        if: ${{ hashFiles('**/package.json') != '' }}
-        uses: actions/setup-node@v4
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
         with:
-          node-version: '20'
-
-      - name: Cache Node
-        if: ${{ hashFiles('**/package.json') != '' }}
-        uses: actions/cache@v4
-        with:
-          path: |
-            **/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
-          restore-keys: ${{ runner.os }}-node-
-
-      - name: Install deps (Node)
-        if: ${{ hashFiles('**/package.json') != '' }}
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm i; fi
-
-      - name: Lint (JS)
-        if: ${{ hashFiles('**/.eslintrc*') != '' }}
-        run: npx eslint . || true
+          name: agent-template.wasm
+          path: target/wasm32-unknown-unknown/release/agent_template.wasm

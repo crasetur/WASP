@@ -1,4 +1,6 @@
-use anyhow::Result;
-#[no_mangle]
-pub extern "C" fn plugin_entry() { let _ = run(); }
-pub fn run() -> Result<()> { Ok(()) }
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub fn run(input: &str) -> String {
+    format!("ok: {input}")
+}
