@@ -1,36 +1,29 @@
 use anyhow::Result;
-use std::path::Path;
-
-mod wasm_runtime;
-mod api_service;
-mod utils;
 
 fn main() -> Result<()> {
-    let input_path = Path::new("./src/input.txt");
-    let output_path = Path::new("./src/output.txt");
-    
-    if !input_path.exists() {
-        println!("File ./input.txt does not exist");
-        return Ok(());
+    println!("Host starting…");
+
+    let wasm_path = "host/src/agent_template.wasm";
+    if std::path::Path::new(wasm_path).exists() {
+        println!("Loading WASM: {wasm_path}");
+        run_wasm(wasm_path)?;
+    } else {
+        println!("(skip) {wasm_path} not found. Build plugin first.");
     }
 
-    let input = std::fs::read(input_path)?;
+    Ok(())
+}
 
-    //check if plugin.wasm exists
-    if !Path::new("./src/agent_template.wasm").exists() {
-        println!("File ./agent_template.wasm does not exist");
-        return Ok(());
-    }
-    let wasm = include_bytes!("agent_template.wasm");
+fn run_wasm(path: &str) -> Result<()> {
+    use wasmtime::{Engine, Instance, Module, Store};
 
-    match wasm_runtime::run_wasm(wasm.to_vec(), input) {
-        Ok(output) => {
-            std::fs::write(output_path, output)?;
-        }
-        Err(err) => {
-            println!("Error executing WASM: {:?}", err);
-        }
-    }
+    let engine = Engine::default();
+    let module = Module::from_file(&engine, path)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
 
+    let add = instance.get_typed_func::<(i32, i32), i32>(&mut store, "add")?;
+    let result = add.call(&mut store, (2, 40))?;
+    println!("Plugin add(2, 40) = {result}");
     Ok(())
 }
