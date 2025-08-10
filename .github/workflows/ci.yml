@@ -25,13 +25,19 @@ jobs:
       - name: Build workspace
         run: cargo build --workspace --verbose
 
-      - name: Build WASM (auto detect cdylib crates)
+      - name: Build WASM (auto-detect cdylib crates)
+        shell: bash
         run: |
+          set -e
           rustup target add wasm32-unknown-unknown
+          found=0
           while IFS= read -r manifest; do
-            if grep -q "crate-type.*cdylib" "$manifest"; then
-              pkg=$(grep -m1 '^name' "$manifest" | sed -E 's/.*"([^"]+)".*/\1/')
+            if grep -q "^\[lib\]" "$manifest" && grep -iq "crate-type.*cdylib" "$manifest"; then
+              pkg=$(grep -m1 '^name[[:space:]]*=' "$manifest" | sed -E 's/.*name[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/')
+              [ -z "$pkg" ] && pkg=$(basename "$(dirname "$manifest")")
               echo "==> Building $pkg (WASM)"
               cargo build -p "$pkg" --target wasm32-unknown-unknown --release
+              found=1
             fi
           done < <(find . -name Cargo.toml)
+          [ "$found" = 0 ] && echo "No cdylib crates found; skipping."
